@@ -41,8 +41,9 @@ private:
     void drawStatusBar() const;
     void drawTopMenu();
     void drawTopMenuPopup();
+    void drawPerformanceTab(Rectangle bounds);
 
-    std::vector<ProcessData> processes;
+    ProcessSnapshot processes;
     PollCallback pollFn;
     RefreshCallback refreshFn;
     SelectionCallback selectionFn;

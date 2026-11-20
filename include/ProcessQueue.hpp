@@ -3,7 +3,6 @@
 #include <deque>
 #include <vector>
 #include "ProcessData.hpp"
-using ProcessSnapshot = std::vector<ProcessData>;
 
 
 class ProcessQueue {

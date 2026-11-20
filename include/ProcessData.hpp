@@ -1,13 +1,18 @@
 #pragma once
 #include <minwindef.h>
-#include <string>
+#include <array>
+#include <vector>
 
 struct ProcessData {
-    std::string              processName;
-    ULONG                    processId;
-    ULONG                    numberOfThreads;
-    ULONG                    memWorkingSet;
-    ULONG                    cpuUsage;
-    FLOAT                    diskUsage;
-    bool                     metricsAvailable = true;
+    std::array<char, MAX_PATH>    processName;
+    ULONG                         processId;
+    ULONG                         numberOfThreads;
+    ULONG                         memWorkingSet;
+    ULONG                         cpuUsage;
+    FLOAT                         diskUsage;
+    bool                          metricsAvailable = true;
+};
+
+struct ProcessSnapshot {
+    std::vector<ProcessData>    procDataBuf;
 };

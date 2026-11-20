@@ -68,7 +68,7 @@ std::string processCellText(const ProcessData& entry, std::size_t column)
         return "N/A";
     }
     switch (column) {
-        case 0: return entry.processName;
+        case 0: return std::string(entry.processName.data());
         case 1: return std::to_string(entry.processId);
         case 2: return std::to_string(entry.numberOfThreads);
         case 3: return std::to_string(entry.cpuUsage) + "%";
@@ -279,7 +279,7 @@ void Gui::drawProcessesTab(Rectangle bounds)
     const float rowsHeight = std::max(0.0f, rowsBottom - rowsY);
 
     const int maxVisibleRows = std::max(1, static_cast<int>(rowsHeight / kRowHeight));
-    const int maxRowScroll = std::max(0, static_cast<int>(processes.size()) - maxVisibleRows);
+    const int maxRowScroll = std::max(0, static_cast<int>(processes.procDataBuf.size()) - maxVisibleRows);
     const int maxColumnScroll = std::max(
         0, static_cast<int>(std::lround(contentWidth - viewWidth)));
     tableScroll = std::clamp(tableScroll, 0, maxRowScroll);
@@ -375,7 +375,7 @@ void Gui::drawProcessesTab(Rectangle bounds)
     }
 
     const Rectangle view{bounds.x + 1.0f, rowsY, viewWidth, rowsHeight};
-    const int lastRow = std::min(static_cast<int>(processes.size()), tableScroll + maxVisibleRows);
+    const int lastRow = std::min(static_cast<int>(processes.procDataBuf.size()), tableScroll + maxVisibleRows);
     for (int i = tableScroll; i < lastRow; ++i) {
         const Rectangle row{
             bounds.x + 1.0f,
@@ -390,7 +390,7 @@ void Gui::drawProcessesTab(Rectangle bounds)
             DrawRectangleRec(row, kAlternateRowColor);
         }
 
-        const ProcessData& entry = processes[static_cast<std::size_t>(i)];
+        const ProcessData& entry = processes.procDataBuf[static_cast<std::size_t>(i)];
         const int textY = static_cast<int>(row.y + (kRowHeight - kCellFontSize) / 2.0f);
         for (std::size_t column = 0; column < kProcessColumnCount; ++column) {
             const float cellX = columnX[column] - columnScroll;
@@ -437,7 +437,7 @@ void Gui::drawProcessScrollBar(Rectangle track, int maxScroll, int visibleRows)
 {
     DrawRectangleRec(track, kScrollTrackColor);
 
-    const int totalRows = static_cast<int>(processes.size());
+    const int totalRows = static_cast<int>(processes.procDataBuf.size());
     const float thumbHeight = maxScroll > 0
         ? std::max(kMinThumbHeight, track.height * static_cast<float>(visibleRows) / totalRows)
         : track.height;
@@ -532,10 +532,10 @@ void Gui::drawPlaceholderTab(Rectangle bounds) const
 
 void Gui::drawStatusBar() const
 {
-    std::string status = "Processes: " + std::to_string(processes.size());
-    if (!processes.empty() && selectedRow >= 0 && selectedRow < static_cast<int>(processes.size())) {
-        status += "    Selected: " + processes[static_cast<std::size_t>(selectedRow)].processName
-                + " (PID " + std::to_string(processes[static_cast<std::size_t>(selectedRow)].processId) + ")";
+    std::string status = "Processes: " + std::to_string(processes.procDataBuf.size());
+    if (!processes.procDataBuf.empty() && selectedRow >= 0 && selectedRow < static_cast<int>(processes.procDataBuf.size())) {
+        status += "    Selected: " + std::string(processes.procDataBuf[static_cast<std::size_t>(selectedRow)].processName.data())
+                + " (PID " + std::to_string(processes.procDataBuf[static_cast<std::size_t>(selectedRow)].processId) + ")";
     }
 
     GuiStatusBar(

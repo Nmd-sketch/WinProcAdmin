@@ -17,7 +17,8 @@ TEST(Queue, NoDataRacesDuringReadWrite) {
 
     std::thread t2{[&pQueue, &writeCounter]() {
         for (; writeCounter <= 100; writeCounter++) {
-            ProcessSnapshot p = {{"Proc", writeCounter, writeCounter + 1}};
+            ProcessSnapshot p = {};
+            p.procDataBuf = {{"Proc", writeCounter, writeCounter + 1}};
             pQueue.push(std::move(p));
         }
         pQueue.close();

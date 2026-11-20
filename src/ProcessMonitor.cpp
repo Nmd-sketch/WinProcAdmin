@@ -12,11 +12,10 @@ static inline int getSizeToUtf8(const wchar_t* wcharArray, int len) {
     return WideCharToMultiByte(CP_UTF8, 0, wcharArray, len, nullptr, 0, nullptr, nullptr);
 }
 
-static inline std::string convertToUtf8(const wchar_t* wcharArray, int len) {
-    std::string str = "";
-    str.resize(len);
-    WideCharToMultiByte(CP_UTF8, 0, wcharArray, -1, str.data(), len, nullptr, nullptr);
-    return str;
+static inline std::array<char, 260> convertToUtf8(const wchar_t* wcharArray, int len) {
+    std::array<char, 260> buf{};
+    WideCharToMultiByte(CP_UTF8, 0, wcharArray, -1, buf.data(), len, nullptr, nullptr);
+    return buf;
 }
 
 static inline ULONGLONG fileTimeToU64(const FILETIME& ft) {
@@ -37,7 +36,7 @@ struct MetricSample {
 };
 }
 
-static void getProcessMetrics(std::vector<ProcessData>& pDataVector)
+static void getProcessMetrics(ProcessSnapshot& pSnap)
 {
     FILETIME creationTime{};
     FILETIME exitTime{};
@@ -52,10 +51,10 @@ static void getProcessMetrics(std::vector<ProcessData>& pDataVector)
     const ULONGLONG systemBusy1 = fileTimeToU64(kernel1) + fileTimeToU64(user1) - fileTimeToU64(idle1);
 
     std::vector<MetricSample> samples;
-    samples.reserve(pDataVector.size());
+    samples.reserve(pSnap.procDataBuf.size());
 
-    for (std::size_t i = 0; i < pDataVector.size(); ++i) {
-        ProcessData& pData = pDataVector[i];
+    for (std::size_t i = 0; i < pSnap.procDataBuf.size(); ++i) {
+        ProcessData& pData = pSnap.procDataBuf[i];
         HANDLE procHandle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pData.processId);
         if (procHandle == NULL) {
             pData.metricsAvailable = false;
@@ -90,7 +89,7 @@ static void getProcessMetrics(std::vector<ProcessData>& pDataVector)
     const ULONGLONG systemDelta = systemBusy2 > systemBusy1 ? systemBusy2 - systemBusy1 : 0;
 
     for (const MetricSample& sample : samples) {
-        ProcessData& pData = pDataVector[sample.index];
+        ProcessData& pData = pSnap.procDataBuf[sample.index];
 
         FILETIME kernelTime2{};
         FILETIME userTime2{};
@@ -128,18 +127,18 @@ void ProcessMonitor::startPolling() noexcept {
 
         PROCESSENTRY32 procEntry{};
         procEntry.dwSize = sizeof(procEntry);
-        std::vector<ProcessData> procSnapshots;
+        ProcessSnapshot pSnapshots;
 
         if (Process32First(snapshot, &procEntry)) {
             do {
                 int size = getSizeToUtf8(procEntry.szExeFile, PATH_MAX);
-                procSnapshots.emplace_back(convertToUtf8(procEntry.szExeFile, size), procEntry.th32ProcessID, procEntry.cntThreads);
-
+                pSnapshots.procDataBuf.emplace_back(
+                    convertToUtf8(procEntry.szExeFile, size), procEntry.th32ProcessID, procEntry.cntThreads);
             } while (Process32Next(snapshot, &procEntry));
         }
         CloseHandle(snapshot);
-        getProcessMetrics(procSnapshots);
-        m_pQueue->push(std::move(procSnapshots));
+        getProcessMetrics(pSnapshots);
+        m_pQueue->push(std::move(pSnapshots));
         Sleep(m_pollInterval);
     } while (m_monitorIsRunning);
 }
