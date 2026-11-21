@@ -4,6 +4,7 @@
 #include <cmath>
 #include <iomanip>
 #include <sstream>
+#include <iostream>
 #include <utility>
 
 namespace {
@@ -40,7 +41,11 @@ constexpr float kTabBarY = kGuiTopMenuHeight + kTopBarHeight + 8.0f;
 constexpr float kContentY = kTabBarY + 36.0f;
 constexpr float kMenuButtonWidth = 62.0f;
 constexpr float kMenuPopupWidth = 148.0f;
+constexpr float kMenuProcPopupWidth = 200.0f;
+constexpr float kMenuProcPopupHeight = 250.0f;
 constexpr float kMenuOptionHeight = 24.0f;
+
+constexpr int   kMenuProcPopupCount = 5;
 }
 
 namespace {
@@ -137,7 +142,8 @@ void Gui::startGui() noexcept
         screenWidth = GetScreenWidth();
         screenHeight = GetScreenHeight();
         pollFn();
-        SetMouseCursor(MOUSE_CURSOR_DEFAULT);
+        if (!isCursorOverDivider)
+            SetMouseCursor(MOUSE_CURSOR_DEFAULT);
 
         BeginDrawing();
         ClearBackground(kPanelColor);
@@ -175,6 +181,10 @@ const char* const kTopMenuOptions[][4]{
     {"Always on top", "Show CPU", "Show memory", nullptr},
 };
 constexpr int kTopMenuOptionCounts[]{4, 3, 3};
+const char* const kProcPopupMenuOptions[5] {
+    "End task", "Go to details", "Properties", "Open file location",
+    "Expand"
+};
 }
 
 void Gui::drawTopMenu()
@@ -231,6 +241,48 @@ void Gui::drawTopMenuPopup()
         !CheckCollisionPointRec(mouse, bar) && !CheckCollisionPointRec(mouse, panel)) {
         openTopMenu = -1;
     }
+}
+
+void Gui::drawProcessPopupMenu(Vector2 point) {
+    if (openProcessPopupMenu < 0) {
+        return;
+    }
+    
+    const int border = 25;
+    const int previousTextSize = GuiGetStyle(DEFAULT, TEXT_SIZE);
+    GuiSetStyle(DEFAULT, TEXT_SIZE, 14);
+
+    const Rectangle panel{point.x, point.y, kMenuProcPopupWidth, kMenuProcPopupHeight};
+    GuiPanel(panel, "Context menu");
+
+    const int btnHeight = (kMenuProcPopupHeight - border) / kMenuProcPopupCount;
+
+    for (int i = 0; i < kMenuProcPopupCount; ++i) {
+        const Rectangle option{point.x, (point.y + border) + (btnHeight * i), kMenuProcPopupWidth, btnHeight};
+        if (GuiButton(option, kProcPopupMenuOptions[i])) {
+            /* Placeholder for now */
+            std::cout << "Button clicked for process: " << pSelected.processName.data() <<'\n';
+            openProcessPopupMenu = -1;
+            procCoordsSet = false;
+            isProcessSelected = false;
+            GuiSetStyle(DEFAULT, TEXT_SIZE, previousTextSize);
+            return;
+        }
+    }
+
+    GuiSetStyle(DEFAULT, TEXT_SIZE, previousTextSize);
+    if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && !CheckCollisionPointRec(GetMousePosition(), panel)) {
+        openProcessPopupMenu = -1;
+        procCoordsSet = false;
+        isProcessSelected = false;
+        return;
+    }
+
+    if (IsMouseButtonPressed(MOUSE_RIGHT_BUTTON) && !CheckCollisionPointRec(GetMousePosition(), panel)) {
+        procCoordsSet = false;
+        isProcessSelected = false;
+    }
+
 }
 
 void Gui::drawTopBar()
@@ -350,17 +402,21 @@ void Gui::drawProcessesTab(Rectangle bounds)
             columnX[i + 1] = columnX[i] + columnWeights[i] * contentWidth;
         }
     }
-
-    bool dividerHovered = false;
+    
+    isCursorOverDivider = false;
     for (int i = 0; i < kProcessDividerCount; ++i) {
         const Rectangle grip{columnX[static_cast<std::size_t>(i) + 1] - columnScroll - kColumnResizeHitArea,
                              header.y,
                              2.0f * kColumnResizeHitArea,
                              rowsBottom - header.y};
-        dividerHovered = dividerHovered || CheckCollisionPointRec(mouse, grip);
+        isCursorOverDivider = isCursorOverDivider || CheckCollisionPointRec(mouse, grip);
     }
-    if (dividerHovered || draggingColumn >= 0) {
+
+    if (isCursorOverDivider || draggingColumn >= 0) {
         SetMouseCursor(MOUSE_CURSOR_RESIZE_EW);
+        currentCursorType = CursorType::DIVIDER;
+    } else {
+        currentCursorType = CursorType::NORMAL;
     }
 
     const Rectangle clip{bounds.x + 1.0f, header.y, viewWidth, rowsBottom - header.y};
@@ -406,12 +462,31 @@ void Gui::drawProcessesTab(Rectangle bounds)
             DrawText(processCellText(entry, column).c_str(),
                      static_cast<int>(cellX + kColumnPadding),
                      textY, kCellFontSize, DARKGRAY);
+
+        }
+
+        
+        Vector2 currentMousePosition = GetMousePosition();
+        if (openProcessPopupMenu > 0 || (IsMouseButtonPressed(MOUSE_RIGHT_BUTTON) 
+            &&  CheckCollisionPointRec(currentMousePosition, row))) {
+            if (!procCoordsSet) {
+                processPopupMenuCoords = currentMousePosition;
+                procCoordsSet = true;
+            } 
+            
+            if (!isProcessSelected) {
+                pSelected = entry;
+                isProcessSelected = true;
+            }
+
+            openProcessPopupMenu = 1;
+            drawProcessPopupMenu(processPopupMenuCoords);
         }
 
         DrawLine(static_cast<int>(row.x), static_cast<int>(row.y + row.height),
                  static_cast<int>(row.x + contentWidth), static_cast<int>(row.y + row.height), kGridColor);
 
-        if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && draggingColumn < 0 &&
+        if ((IsMouseButtonPressed(MOUSE_LEFT_BUTTON) || IsMouseButtonPressed(MOUSE_RIGHT_BUTTON))&& draggingColumn < 0 &&
             CheckCollisionPointRec(mouse, view) && CheckCollisionPointRec(mouse, row)) {
             selectedRow = i;
             selectionFn(i);
@@ -431,6 +506,10 @@ void Gui::drawProcessesTab(Rectangle bounds)
 
     drawProcessScrollBar(vTrack, maxRowScroll, maxVisibleRows);
     drawProcessHScrollBar(hTrack, maxColumnScroll, static_cast<int>(viewWidth));
+}
+
+void Gui::drawPerformanceTab(Rectangle bounds) {
+
 }
 
 void Gui::drawProcessScrollBar(Rectangle track, int maxScroll, int visibleRows)
